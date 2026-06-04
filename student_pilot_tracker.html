@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFI Student Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ink: #0f1117;
+    --paper: #f7f5f0;
+    --card: #ffffff;
+    --accent: #1a4fd6;
+    --accent-light: #e8eeff;
+    --green: #0d6b4a;
+    --green-light: #e0f5ec;
+    --amber: #b45309;
+    --amber-light: #fef3c7;
+    --red: #b91c1c;
+    --red-light: #fee2e2;
+    --muted: #6b7280;
+    --border: #e5e2db;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--paper); color: var(--ink); min-height: 100vh; }
+
+  /* AUTH SCREEN */
+  .auth-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ink);
+  }
+  .auth-box {
+    background: white;
+    border-radius: 16px;
+    padding: 2.5rem;
+    width: 380px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+  }
+  .auth-logo {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .auth-title { font-size: 24px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .auth-sub { font-size: 14px; color: var(--muted); margin-bottom: 1.75rem; }
+  .auth-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+  .auth-tab {
+    flex: 1; padding: 8px; text-align: center; font-size: 14px; font-weight: 500;
+    cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent;
+    margin-bottom: -2px; transition: all 0.15s;
+  }
+  .auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .auth-field { margin-bottom: 1rem; }
+  .auth-field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .auth-field input {
+    width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+    border-radius: 8px; font-family: var(--sans); font-size: 15px;
+    outline: none; color: var(--ink); transition: border-color 0.15s;
+  }
+  .auth-field input:focus { border-color: var(--accent); }
+  .auth-btn {
+    width: 100%; padding: 12px; border-radius: 8px; border: none;
+    background: var(--accent); color: white; font-family: var(--sans);
+    font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s;
+    margin-top: 4px;
+  }
+  .auth-btn:hover { background: #1540b0; }
+  .auth-btn:disabled { background: #a0aec0; cursor: not-allowed; }
+  .auth-error {
+    background: var(--red-light); color: var(--red); border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 1rem; display: none;
+  }
+  .auth-success {
+    background: var(--green-light); color: var(--green); border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 1rem; display: none;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    background: var(--ink); color: white; padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-brand { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #a0aec0; }
+  .topbar-brand span { color: white; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .topbar-user { font-size: 12px; color: #a0aec0; font-family: var(--mono); }
+  .btn-top {
+    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-add { background: var(--accent); color: white; }
+  .btn-add:hover { background: #1540b0; }
+  .btn-signout { background: rgba(255,255,255,0.1); color: white; }
+  .btn-signout:hover { background: rgba(255,255,255,0.2); }
+
+  /* LAYOUT */
+  .shell { display: flex; min-height: calc(100vh - 56px); }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 220px; background: var(--ink); padding: 1.5rem 0;
+    flex-shrink: 0; position: sticky; top: 56px;
+    height: calc(100vh - 56px); overflow-y: auto;
+  }
+  .sidebar-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #4a5568; padding: 0 1.25rem 0.75rem; }
+  .student-btn {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 10px 1.25rem; background: none; border: none; color: #a0aec0;
+    font-family: var(--sans); font-size: 14px; cursor: pointer;
+    transition: all 0.15s; text-align: left;
+  }
+  .student-btn:hover { background: rgba(255,255,255,0.06); color: white; }
+  .student-btn.active { background: rgba(26,79,214,0.2); color: white; border-left: 2px solid var(--accent); }
+  .student-avatar {
+    width: 28px; height: 28px; border-radius: 50%; background: #2d3748;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; flex-shrink: 0; color: #a0aec0;
+  }
+  .student-btn.active .student-avatar { background: var(--accent); color: white; }
+  .student-name-side { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .del-student { opacity: 0; background: none; border: none; color: #e53e3e; font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1; transition: opacity 0.15s; }
+  .student-btn:hover .del-student { opacity: 1; }
+  .sidebar-saving { font-size: 11px; color: #4a5568; font-family: var(--mono); padding: 8px 1.25rem; display: none; }
+  .sidebar-saving.show { display: block; }
+
+  /* MAIN */
+  .main { flex: 1; padding: 2rem; max-width: 900px; }
+
+  /* EMPTY / LOADING */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 400px; color: var(--muted); text-align: center; gap: 12px; }
+  .empty-icon { font-size: 48px; opacity: 0.3; }
+  .empty-state h2 { font-size: 18px; font-weight: 500; color: var(--ink); }
+  .empty-state p { font-size: 14px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* STUDENT HEADER */
+  .student-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; }
+  .student-title { display: flex; align-items: center; gap: 14px; }
+  .big-avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; flex-shrink: 0; }
+  .student-name-edit { font-size: 22px; font-weight: 600; border: none; background: transparent; color: var(--ink); font-family: var(--sans); width: 100%; outline: none; }
+  .student-name-edit:focus { border-bottom: 2px solid var(--accent); }
+  .student-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  /* CARDS */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 1.25rem; overflow: hidden; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: #fafaf8; }
+  .card-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+
+  /* INFO GRID */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+  .info-cell { padding: 12px 16px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .info-cell:nth-child(3n) { border-right: none; }
+  .info-cell:nth-last-child(-n+3) { border-bottom: none; }
+  .info-cell label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .info-cell input, .info-cell select { width: 100%; border: none; background: transparent; font-family: var(--sans); font-size: 14px; color: var(--ink); outline: none; padding: 2px 0; border-bottom: 1px dashed var(--border); }
+  .info-cell input:focus, .info-cell select:focus { border-bottom: 1.5px solid var(--accent); }
+
+  /* HOURS TABLE */
+  .hours-table { width: 100%; border-collapse: collapse; }
+  .hours-table th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 8px 14px; text-align: left; background: #fafaf8; border-bottom: 1px solid var(--border); }
+  .hours-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+  .hours-table tr:last-child td { border-bottom: none; }
+  .hours-table td:nth-child(2) { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .hours-input { width: 70px; border: none; background: transparent; font-family: var(--mono); font-size: 14px; color: var(--ink); outline: none; text-align: center; padding: 3px 6px; border-bottom: 1px dashed var(--border); }
+  .hours-input:focus { border-bottom: 1.5px solid var(--accent); }
+  .remaining { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .remaining.done { color: var(--green); }
+  .remaining.close { color: var(--amber); }
+  .remaining.far { color: var(--red); }
+  .progress-wrap { display: flex; align-items: center; gap: 10px; }
+  .progress-bar { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: var(--accent); transition: width 0.3s; }
+  .progress-fill.done { background: var(--green); }
+
+  /* SKILLS */
+  .skill-group-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 6px 14px; background: #f5f4f0; color: var(--muted); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); }
+  .skill-group-label:first-child { border-top: none; }
+  .skills-table { width: 100%; border-collapse: collapse; }
+  .skills-table th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 8px 14px; text-align: left; background: #fafaf8; border-bottom: 1px solid var(--border); }
+  .skills-table td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  .skills-table tr:last-child td { border-bottom: none; }
+  .skill-name { border: none; background: transparent; font-family: var(--sans); font-size: 13px; color: var(--ink); outline: none; width: 100%; padding: 2px 0; }
+  .skill-name:focus { border-bottom: 1px solid var(--accent); }
+  .skill-notes { border: none; background: transparent; font-family: var(--sans); font-size: 12px; color: var(--muted); outline: none; width: 100%; padding: 2px 0; }
+  .skill-notes:focus { border-bottom: 1px solid var(--accent); }
+  .stars { display: flex; gap: 3px; cursor: pointer; }
+  .star { font-size: 16px; color: var(--border); transition: color 0.1s; user-select: none; }
+  .star.filled { color: #f59e0b; }
+  .status-select { border: none; border-radius: 99px; padding: 3px 10px; font-size: 11px; font-weight: 500; font-family: var(--sans); cursor: pointer; outline: none; appearance: none; -webkit-appearance: none; }
+  .status-select.sat { background: var(--green-light); color: var(--green); }
+  .status-select.needs { background: var(--amber-light); color: var(--amber); }
+  .status-select.not { background: #f3f4f6; color: var(--muted); }
+
+  /* LESSON LOG */
+  .lesson-table { width: 100%; border-collapse: collapse; }
+  .lesson-table th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 8px 14px; text-align: left; background: #fafaf8; border-bottom: 1px solid var(--border); }
+  .lesson-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .lesson-table tr:last-child td { border-bottom: none; }
+  .lesson-input { border: none; background: transparent; font-family: var(--sans); font-size: 13px; color: var(--ink); outline: none; width: 100%; padding: 2px 0; }
+  .lesson-input:focus { border-bottom: 1px solid var(--accent); }
+  .lesson-input.mono { font-family: var(--mono); font-size: 12px; }
+
+  /* ENDORSEMENTS */
+  .end-table { width: 100%; border-collapse: collapse; }
+  .end-table th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 8px 14px; text-align: left; background: #fafaf8; border-bottom: 1px solid var(--border); }
+  .end-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  .end-table tr:last-child td { border-bottom: none; }
+  .end-input { border: none; background: transparent; font-family: var(--sans); font-size: 13px; color: var(--ink); outline: none; width: 100%; padding: 2px 0; }
+  .end-input:focus { border-bottom: 1px solid var(--accent); }
+  .checkbox-wrap { display: flex; align-items: flex-start; gap: 8px; }
+  .end-check { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; margin-top: 2px; flex-shrink: 0; }
+
+  /* NOTES */
+  .notes-area { width: 100%; min-height: 100px; border: none; background: transparent; font-family: var(--sans); font-size: 14px; color: var(--ink); outline: none; padding: 14px 16px; resize: vertical; line-height: 1.7; }
+  .notes-area::placeholder { color: #bbb; }
+
+  /* SHARED BUTTONS */
+  .del-row { background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; transition: color 0.15s; }
+  .del-row:hover { color: var(--red); }
+  .add-row-btn { width: 100%; padding: 10px; background: none; border: none; border-top: 1px solid var(--border); color: var(--accent); font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s; text-align: center; }
+  .add-row-btn:hover { background: var(--accent-light); }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 14px; padding: 1.75rem; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .modal p { font-size: 14px; color: var(--muted); margin-bottom: 1.25rem; }
+  .modal input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-family: var(--sans); font-size: 15px; outline: none; margin-bottom: 1rem; color: var(--ink); }
+  .modal input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-cancel { padding: 9px 18px; border-radius: 8px; border: 1px solid var(--border); background: white; font-family: var(--sans); font-size: 14px; cursor: pointer; }
+  .btn-cancel:hover { background: #f5f5f5; }
+  .btn-confirm { padding: 9px 18px; border-radius: 8px; border: none; background: var(--accent); color: white; font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; }
+  .btn-confirm:hover { background: #1540b0; }
+  .btn-danger { padding: 9px 18px; border-radius: 8px; border: none; background: var(--red); color: white; font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; }
+  .btn-danger:hover { background: #991b1b; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--ink); color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-family: var(--sans); z-index: 300; transform: translateY(20px); opacity: 0; transition: all 0.3s; pointer-events: none; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { background: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">✈ CFI Tracker</div>
+    <div class="auth-title">Welcome back</div>
+    <div class="auth-sub">Sign in to access your student records</div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tabSignin" onclick="switchTab('signin')">Sign In</div>
+      <div class="auth-tab" id="tabSignup" onclick="switchTab('signup')">Create Account</div>
+    </div>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-success" id="authSuccess"></div>
+    <div class="auth-field">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="you@email.com" onkeydown="if(event.key==='Enter')handleAuth()">
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input type="password" id="authPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter')handleAuth()">
+    </div>
+    <div class="auth-field" id="nameField" style="display:none;">
+      <label>Your Name</label>
+      <input type="text" id="authName" placeholder="First Last" onkeydown="if(event.key==='Enter')handleAuth()">
+    </div>
+    <button class="auth-btn" id="authBtn" onclick="handleAuth()">Sign In</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none;">
+  <div class="topbar">
+    <div class="topbar-brand"><span>CFI</span> · Student Tracker</div>
+    <div class="topbar-right">
+      <span class="topbar-user" id="topbarUser"></span>
+      <button class="btn-top btn-add" onclick="openAddModal()">+ New Student</button>
+      <button class="btn-top btn-signout" onclick="signOut()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-label">My Students</div>
+      <div id="studentList"></div>
+      <div class="sidebar-saving" id="savingIndicator">saving…</div>
+    </div>
+    <div class="main" id="main">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">✈️</div>
+        <h2>No student selected</h2>
+        <p>Add a student or select one from the sidebar.</p>
+      </div>
+      <div id="studentView" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h3>Add Student</h3>
+    <p>Enter the student's name to create a new progress record.</p>
+    <input type="text" id="newStudentName" placeholder="Student full name" onkeydown="if(event.key==='Enter')confirmAdd()">
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAddModal()">Cancel</button>
+      <button class="btn-confirm" onclick="confirmAdd()">Add Student</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h3>Delete Student?</h3>
+    <p id="deleteModalMsg">This will permanently delete the student and all their records. This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn-danger" onclick="confirmDelete()">Delete Student</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SUPABASE CONFIG ───────────────────────────────────────────────
+const SUPABASE_URL = 'https://ulvpxvuxwnumrkamiafxb.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsdnB4dnV4d251bXJrYW1pZnhiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDk5OTAsImV4cCI6MjA5NTkyNTk5MH0.-Ww3liAd2hDqOeaQwizVOh1OtpFY1qI9tWGAvpbLZDI';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─── DATA CONSTANTS ────────────────────────────────────────────────
+const HOURS_REQS = [
+  { label: 'Total flight time', req: 40, far: '§ 61.109(a)', unit: 'hrs', note: '' },
+  { label: 'Flight training from authorized instructor (dual)', req: 20, far: '§ 61.109(a)', unit: 'hrs', note: '' },
+  { label: 'Solo flight time', req: 10, far: '§ 61.109(a)', unit: 'hrs', note: '' },
+  { label: 'Cross-country flight training (dual)', req: 3, far: '§ 61.109(a)(1)', unit: 'hrs', note: '' },
+  { label: 'Night flight training (dual)', req: 3, far: '§ 61.109(a)(2)', unit: 'hrs', note: 'Includes XC >100 NM and 10 T/Os & landings' },
+  { label: 'Night cross-country flight (>100 NM total distance)', req: 1, far: '§ 61.109(a)(2)(i)', unit: 'flt', note: 'Count flights, not hours' },
+  { label: 'Night takeoffs & landings to full stop', req: 10, far: '§ 61.109(a)(2)(ii)', unit: 'ops', note: 'Each landing in traffic pattern' },
+  { label: 'Instrument flight training (sole ref to instruments)', req: 3, far: '§ 61.109(a)(3)', unit: 'hrs', note: 'Hood / view-limiting device' },
+  { label: 'Checkride prep flight training (within 2 calendar months)', req: 3, far: '§ 61.109(a)(4)', unit: 'hrs', note: 'Must be within 2 months of practical test' },
+  { label: 'Solo cross-country time', req: 5, far: '§ 61.109(a)(5)(i)', unit: 'hrs', note: '' },
+  { label: 'Solo long XC (150 NM, 3 full-stop landings, 1 leg >50 NM)', req: 1, far: '§ 61.109(a)(5)(ii)', unit: 'flt', note: 'Count flights, not hours' },
+  { label: 'Solo T/Os & landings at towered airport (full stop)', req: 3, far: '§ 61.109(a)(5)(iii)', unit: 'ops', note: 'Each landing in traffic pattern' },
+];
+
+const SKILL_GROUPS = [
+  { label: 'Preflight & Ground Ops', skills: ['Preflight inspection', 'Aircraft systems knowledge', 'Taxiing & ground ops'] },
+  { label: 'Takeoffs & Landings', skills: ['Normal T/O & climb', 'Normal landing', 'Short field T/O', 'Short field landing', 'Soft field T/O', 'Soft field landing'] },
+  { label: 'Maneuvers', skills: ['Slow flight', 'Power-off stalls', 'Power-on stalls', 'Steep turns', 'Ground reference maneuvers', 'S-turns across a road'] },
+  { label: 'Navigation & Systems', skills: ['Pilotage & dead reckoning', 'VOR navigation', 'Diversion procedures', 'Lost procedures', 'Flight planning & performance'] },
+  { label: 'Emergency Procedures', skills: ['Engine failure (cruise)', 'Engine failure (T/O)', 'Emergency approach & landing', 'System malfunctions'] },
+];
+
+const ENDORSEMENTS = [
+  { label: 'Pre-solo aeronautical knowledge test', ac: 'A.3', far: '§ 61.87(b)' },
+  { label: 'Pre-solo flight training', ac: 'A.4', far: '§ 61.87(c)(1) and (2)' },
+  { label: 'Pre-solo night flight training', ac: 'A.5', far: '§ 61.87(o)' },
+  { label: 'First solo (initial 90-day period)', ac: 'A.6', far: '§ 61.87(n)' },
+  { label: 'Solo flight renewal (each additional 90-day period)', ac: 'A.7', far: '§ 61.87(p)' },
+  { label: 'Solo T/O & landings at another airport within 25 NM', ac: 'A.8', far: '§ 61.93(b)(1)' },
+  { label: 'Solo cross-country flight (initial endorsement)', ac: 'A.9', far: '§ 61.93(c)(1) and (2)' },
+  { label: 'Solo cross-country flight (per-flight approval)', ac: 'A.10', far: '§ 61.93(c)(3)' },
+  { label: 'Repeated solo XC within 50 NM (specific route)', ac: 'A.11', far: '§ 61.93(b)(2)' },
+  { label: 'Private pilot aeronautical knowledge test', ac: 'A.36', far: '§§ 61.35(a)(1), 61.103(d), and 61.105' },
+  { label: 'Private pilot flight proficiency / practical test (checkride)', ac: 'A.37', far: '§§ 61.103(f), 61.107(b), and 61.109' },
+  { label: 'Review of knowledge test deficiencies (AKTR)', ac: 'A.2', far: '§ 61.39(a)(6)(iii)' },
+  { label: 'Prerequisites for practical test (checkride rec)', ac: 'A.1', far: '§ 61.39(a)(6)(i) and (ii)' },
+];
+
+// ─── STATE ─────────────────────────────────────────────────────────
+let currentUser = null;
+let students = [];
+let activeIdx = null;
+let saveTimer = null;
+let currentTab = 'signin';
+let studentToDelete = null;
+
+// ─── AUTH ──────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tabSignin').classList.toggle('active', tab === 'signin');
+  document.getElementById('tabSignup').classList.toggle('active', tab === 'signup');
+  document.getElementById('authBtn').textContent = tab === 'signin' ? 'Sign In' : 'Create Account';
+  document.getElementById('nameField').style.display = tab === 'signup' ? 'block' : 'none';
+  document.getElementById('authError').style.display = 'none';
+  document.getElementById('authSuccess').style.display = 'none';
+}
+
+async function handleAuth() {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const btn = document.getElementById('authBtn');
+  const errEl = document.getElementById('authError');
+  const sucEl = document.getElementById('authSuccess');
+  errEl.style.display = 'none';
+  sucEl.style.display = 'none';
+  if (!email || !password) { showAuthError('Please enter your email and password.'); return; }
+  btn.disabled = true;
+  btn.textContent = currentTab === 'signin' ? 'Signing in…' : 'Creating account…';
+  if (currentTab === 'signup') {
+    const { error } = await sb.auth.signUp({ email, password });
+    if (error) { showAuthError(error.message); btn.disabled = false; btn.textContent = 'Create Account'; return; }
+    sucEl.textContent = 'Account created! You are now signed in.';
+    sucEl.style.display = 'block';
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { showAuthError(error.message); btn.disabled = false; btn.textContent = 'Sign In'; return; }
+  }
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  currentUser = null;
+  students = [];
+  activeIdx = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('authEmail').value = '';
+  document.getElementById('authPassword').value = '';
+  document.getElementById('authBtn').disabled = false;
+  document.getElementById('authBtn').textContent = 'Sign In';
+}
+
+// ─── SUPABASE DATA ─────────────────────────────────────────────────
+async function loadStudents() {
+  const { data, error } = await sb.from('students').select('*').order('created_at', { ascending: true });
+  if (error) { showToast('Error loading students', true); return; }
+  students = (data || []).map(row => ({ _rowId: row.id, ...row.data }));
+  renderSidebar();
+  if (students.length > 0) { activeIdx = 0; renderStudent(); } else { showEmpty(); }
+}
+
+async function saveStudent(idx) {
+  const s = students[idx];
+  const { _rowId, ...data } = s;
+  showSaving(true);
+  if (_rowId) {
+    const { error } = await sb.from('students').update({ data, updated_at: new Date().toISOString() }).eq('id', _rowId);
+    if (error) showToast('Save failed', true);
+  } else {
+    const { data: row, error } = await sb.from('students').insert({ user_id: currentUser.id, data }).select().single();
+    if (error) { showToast('Save failed', true); }
+    else { students[idx]._rowId = row.id; }
+  }
+  showSaving(false);
+}
+
+async function deleteStudentFromDB(idx) {
+  const s = students[idx];
+  if (s._rowId) {
+    const { error } = await sb.from('students').delete().eq('id', s._rowId);
+    if (error) { showToast('Delete failed', true); return false; }
+  }
+  return true;
+}
+
+function debounceSave(idx) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveStudent(idx), 1200);
+}
+
+function showSaving(on) {
+  document.getElementById('savingIndicator').classList.toggle('show', on);
+}
+
+// ─── STUDENT INIT ──────────────────────────────────────────────────
+function initStudent(name) {
+  return {
+    _rowId: null,
+    name,
+    info: { aircraft: '', startDate: '', soloDate: '', phase: 'Pre-solo', medClass: '', written: '' },
+    hours: HOURS_REQS.map(h => ({ ...h, logged: 0 })),
+    skills: SKILL_GROUPS.map(g => ({ label: g.label, items: g.skills.map(s => ({ name: s, rating: 0, status: 'not', notes: '' })) })),
+    lessons: [],
+    endorsements: ENDORSEMENTS.map(e => ({ label: e.label, ac: e.ac, far: e.far, date: '', initials: '', done: false })),
+    notes: ''
+  };
+}
+
+function initials(name) {
+  return name.split(' ').map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || '??';
+}
+
+// ─── RENDER ────────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('studentList');
+  list.innerHTML = students.map((s, i) => `
+    <button class="student-btn ${activeIdx === i ? 'active' : ''}" onclick="selectStudent(${i})">
+      <div class="student-avatar">${initials(s.name)}</div>
+      <span class="student-name-side">${s.name || 'Unnamed'}</span>
+      <button class="del-student" onclick="openDeleteModal(event,${i})" title="Delete">×</button>
+    </button>
+  `).join('');
+}
+
+function selectStudent(i) {
+  activeIdx = i;
+  renderSidebar();
+  renderStudent();
+}
+
+function showEmpty() {
+  document.getElementById('emptyState').style.display = 'flex';
+  document.getElementById('studentView').style.display = 'none';
+}
+
+function renderStudent() {
+  if (activeIdx === null || !students[activeIdx]) { showEmpty(); return; }
+  const s = students[activeIdx];
+  document.getElementById('emptyState').style.display = 'none';
+  const view = document.getElementById('studentView');
+  view.style.display = 'block';
+  view.innerHTML = buildStudentHTML(s, activeIdx);
+}
+
+// ─── BUILD HTML ────────────────────────────────────────────────────
+function buildStudentHTML(s, idx) {
+  return `
+    <div class="student-header">
+      <div class="student-title">
+        <div class="big-avatar">${initials(s.name)}</div>
+        <div style="flex:1">
+          <input class="student-name-edit" value="${esc(s.name)}" placeholder="Student name"
+            oninput="students[${idx}].name=this.value;renderSidebar();debounceSave(${idx});">
+          <div class="student-meta">Private Pilot Training</div>
+        </div>
+      </div>
+    </div>
+    ${buildInfoCard(s, idx)}
+    ${buildHoursCard(s, idx)}
+    ${buildSkillsCard(s, idx)}
+    ${buildLessonsCard(s, idx)}
+    ${buildEndorsementsCard(s, idx)}
+    ${buildNotesCard(s, idx)}
+  `;
+}
+
+function buildInfoCard(s, idx) {
+  const i = s.info;
+  return `<div class="card">
+    <div class="card-header"><span class="card-title">👤 Student Info</span></div>
+    <div class="info-grid">
+      <div class="info-cell"><label>Aircraft</label><input value="${esc(i.aircraft)}" placeholder="N12345 C172" oninput="students[${idx}].info.aircraft=this.value;debounceSave(${idx});"></div>
+      <div class="info-cell"><label>Start Date</label><input type="date" value="${esc(i.startDate)}" oninput="students[${idx}].info.startDate=this.value;debounceSave(${idx});"></div>
+      <div class="info-cell"><label>Phase</label>
+        <select oninput="students[${idx}].info.phase=this.value;debounceSave(${idx});">
+          ${['Pre-solo','Post-solo','XC Phase','Night/Instrument','Checkride Prep'].map(p=>`<option ${i.phase===p?'selected':''}>${p}</option>`).join('')}
+        </select>
+      </div>
+      <div class="info-cell"><label>Solo Date</label><input type="date" value="${esc(i.soloDate)}" oninput="students[${idx}].info.soloDate=this.value;debounceSave(${idx});"></div>
+      <div class="info-cell"><label>Medical Class</label>
+        <select oninput="students[${idx}].info.medClass=this.value;debounceSave(${idx});">
+          ${['','3rd Class','2nd Class','1st Class','BasicMed'].map(m=>`<option ${i.medClass===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="info-cell"><label>Written Exam</label>
+        <select oninput="students[${idx}].info.written=this.value;debounceSave(${idx});">
+          ${['','Not taken','Scheduled','Passed','Failed'].map(m=>`<option ${(i.written||'')===(m)?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildHoursCard(s, idx) {
+  const unitLabel = { hrs: 'hrs', flt: 'flight', ops: 'ops' };
+  const stepFor = u => u === 'hrs' ? '0.1' : '1';
+  const rows = s.hours.map((h, hi) => {
+    const unit = h.unit || 'hrs';
+    const pct = h.req > 0 ? Math.min(100, Math.round((h.logged / h.req) * 100)) : (h.logged > 0 ? 100 : 0);
+    const rem = h.req > 0 ? Math.max(0, h.req - h.logged) : null;
+    const remFmt = rem === null ? '—' : (unit === 'hrs' ? rem.toFixed(1) + ' hrs' : rem + ' ' + unitLabel[unit]);
+    const remClass = rem === null ? '' : (rem === 0 ? 'done' : rem <= 1 ? 'close' : 'far');
+    const reqFmt = h.req > 0 ? h.req + ' ' + unitLabel[unit] : '—';
+    return `<tr>
+      <td>
+        <div style="font-size:13px;">${h.label}</div>
+        ${h.note ? `<div style="font-size:11px;color:var(--muted);margin-top:1px;font-style:italic;">${h.note}</div>` : ''}
+        <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px;">14 CFR ${h.far}</div>
+      </td>
+      <td>${reqFmt}</td>
+      <td><input class="hours-input" type="number" min="0" step="${stepFor(unit)}" value="${h.logged}"
+        oninput="students[${idx}].hours[${hi}].logged=parseFloat(this.value)||0;debounceSave(${idx});updateHoursRow(${idx},${hi});" id="hr-${idx}-${hi}"></td>
+      <td>
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill ${pct>=100?'done':''}" id="prog-${idx}-${hi}" style="width:${pct}%"></div></div>
+          <span class="remaining ${remClass}" id="rem-${idx}-${hi}">${remFmt}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="card-header"><span class="card-title">⏱ Aeronautical Experience Requirements <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:6px;font-weight:400;">14 CFR § 61.109(a) · ASEL</span></span></div>
+    <table class="hours-table">
+      <thead><tr><th>Requirement</th><th>Required</th><th>Logged</th><th>Remaining</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function updateHoursRow(idx, hi) {
+  const h = students[idx].hours[hi];
+  const unit = h.unit || 'hrs';
+  const unitLabel = { hrs: 'hrs', flt: 'flight', ops: 'ops' };
+  const pct = h.req > 0 ? Math.min(100, Math.round((h.logged / h.req) * 100)) : (h.logged > 0 ? 100 : 0);
+  const rem = h.req > 0 ? Math.max(0, h.req - h.logged) : null;
+  const remFmt = rem === null ? '—' : (unit === 'hrs' ? rem.toFixed(1) + ' hrs' : rem + ' ' + unitLabel[unit]);
+  const fill = document.getElementById(`prog-${idx}-${hi}`);
+  const remEl = document.getElementById(`rem-${idx}-${hi}`);
+  if (fill) { fill.style.width = pct + '%'; fill.className = 'progress-fill' + (pct >= 100 ? ' done' : ''); }
+  if (remEl && rem !== null) { remEl.textContent = remFmt; remEl.className = 'remaining ' + (rem === 0 ? 'done' : rem <= 1 ? 'close' : 'far'); }
+}
+
+function buildSkillsCard(s, idx) {
+  let html = `<div class="card"><div class="card-header"><span class="card-title">✅ ACS Skill Ratings</span></div>`;
+  s.skills.forEach((group, gi) => {
+    html += `<div class="skill-group-label">${group.label}</div>
+    <table class="skills-table">
+      <thead><tr><th style="width:30%">Task</th><th>Rating</th><th>Status</th><th>Notes</th><th style="width:30px"></th></tr></thead><tbody>`;
+    group.items.forEach((item, ii) => {
+      const statusClass = item.status === 'sat' ? 'sat' : item.status === 'needs' ? 'needs' : 'not';
+      html += `<tr>
+        <td><input class="skill-name" value="${esc(item.name)}" oninput="students[${idx}].skills[${gi}].items[${ii}].name=this.value;debounceSave(${idx});"></td>
+        <td>${buildStars(idx, gi, ii, item.rating)}</td>
+        <td><select class="status-select ${statusClass}" id="stat-${idx}-${gi}-${ii}"
+          onchange="students[${idx}].skills[${gi}].items[${ii}].status=this.value;debounceSave(${idx});this.className='status-select '+this.value;">
+          <option value="not" ${item.status==='not'?'selected':''}>Not started</option>
+          <option value="needs" ${item.status==='needs'?'selected':''}>Needs work</option>
+          <option value="sat" ${item.status==='sat'?'selected':''}>Satisfactory</option>
+        </select></td>
+        <td><input class="skill-notes" value="${esc(item.notes)}" placeholder="Add note…" oninput="students[${idx}].skills[${gi}].items[${ii}].notes=this.value;debounceSave(${idx});"></td>
+        <td><button class="del-row" onclick="deleteSkill(${idx},${gi},${ii})">×</button></td>
+      </tr>`;
+    });
+    html += `</tbody></table><button class="add-row-btn" onclick="addSkill(${idx},${gi})">+ Add task</button>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function buildStars(idx, gi, ii, rating) {
+  return `<div class="stars" id="stars-${idx}-${gi}-${ii}">` +
+    [1,2,3,4,5].map(n => `<span class="star ${n <= rating ? 'filled' : ''}" onclick="setRating(${idx},${gi},${ii},${n})" data-v="${n}">★</span>`).join('') +
+  `</div>`;
+}
+
+function setRating(idx, gi, ii, val) {
+  students[idx].skills[gi].items[ii].rating = val;
+  debounceSave(idx);
+  document.querySelectorAll(`#stars-${idx}-${gi}-${ii} .star`).forEach(s => { s.classList.toggle('filled', parseInt(s.dataset.v) <= val); });
+}
+
+function addSkill(idx, gi) {
+  students[idx].skills[gi].items.push({ name: 'New task', rating: 0, status: 'not', notes: '' });
+  debounceSave(idx); renderStudent();
+}
+
+function deleteSkill(idx, gi, ii) {
+  students[idx].skills[gi].items.splice(ii, 1);
+  debounceSave(idx); renderStudent();
+}
+
+function buildLessonsCard(s, idx) {
+  const rows = s.lessons.map((l, li) => `<tr>
+    <td><input class="lesson-input mono" style="width:110px" value="${esc(l.date)}" type="date" oninput="students[${idx}].lessons[${li}].date=this.value;debounceSave(${idx});"></td>
+    <td><input class="lesson-input mono" style="width:60px" value="${esc(l.hobbs)}" placeholder="1.2" oninput="students[${idx}].lessons[${li}].hobbs=this.value;debounceSave(${idx});"></td>
+    <td><input class="lesson-input" value="${esc(l.topics)}" placeholder="Topics covered…" oninput="students[${idx}].lessons[${li}].topics=this.value;debounceSave(${idx});"></td>
+    <td><input class="lesson-input" value="${esc(l.homework)}" placeholder="Next focus…" oninput="students[${idx}].lessons[${li}].homework=this.value;debounceSave(${idx});"></td>
+    <td><button class="del-row" onclick="deleteLesson(${idx},${li})">×</button></td>
+  </tr>`).join('');
+  return `<div class="card">
+    <div class="card-header"><span class="card-title">📋 Lesson Log</span></div>
+    <table class="lesson-table">
+      <thead><tr><th>Date</th><th>Hobbs</th><th>Topics covered</th><th>Homework / next focus</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <button class="add-row-btn" onclick="addLesson(${idx})">+ Add lesson</button>
+  </div>`;
+}
+
+function addLesson(idx) {
+  students[idx].lessons.push({ date: '', hobbs: '', topics: '', homework: '' });
+  debounceSave(idx); renderStudent();
+}
+
+function deleteLesson(idx, li) {
+  students[idx].lessons.splice(li, 1);
+  debounceSave(idx); renderStudent();
+}
+
+function buildEndorsementsCard(s, idx) {
+  const rows = s.endorsements.map((e, ei) => `<tr>
+    <td style="width:56px;text-align:center;vertical-align:middle;">
+      <span style="font-family:var(--mono);font-size:11px;font-weight:700;background:${e.done?'#e0f5ec':'#f3f4f6'};color:${e.done?'#0d6b4a':'#6b7280'};padding:3px 7px;border-radius:5px;white-space:nowrap;">${esc(e.ac||'')}</span>
+    </td>
+    <td>
+      <div class="checkbox-wrap">
+        <input type="checkbox" class="end-check" ${e.done?'checked':''} onchange="students[${idx}].endorsements[${ei}].done=this.checked;debounceSave(${idx});renderStudent();">
+        <div>
+          <div style="font-size:13px;color:${e.done?'var(--green)':'inherit'};${e.done?'text-decoration:line-through;opacity:0.6':''}">${esc(e.label)}</div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:1px;">14 CFR ${esc(e.far||'')}</div>
+        </div>
+      </div>
+    </td>
+    <td style="width:130px;"><input class="end-input" type="date" value="${esc(e.date)}" oninput="students[${idx}].endorsements[${ei}].date=this.value;debounceSave(${idx});"></td>
+    <td style="width:90px;"><input class="end-input" style="width:60px" value="${esc(e.initials)}" placeholder="RW" oninput="students[${idx}].endorsements[${ei}].initials=this.value;debounceSave(${idx});"></td>
+  </tr>`).join('');
+  return `<div class="card">
+    <div class="card-header"><span class="card-title">📜 Endorsements &amp; Milestones <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:6px;font-weight:400;">per AC 61-65K</span></span></div>
+    <table class="end-table">
+      <thead><tr><th style="width:56px">AC ID</th><th>Endorsement · 14 CFR Reference</th><th style="width:130px">Date</th><th style="width:90px">CFI Init.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function buildNotesCard(s, idx) {
+  return `<div class="card">
+    <div class="card-header"><span class="card-title">💬 CFI Notes</span></div>
+    <textarea class="notes-area" placeholder="Running notes on strengths, weak areas, attitude, checkride readiness…"
+      oninput="students[${idx}].notes=this.value;debounceSave(${idx});">${esc(s.notes)}</textarea>
+  </div>`;
+}
+
+// ─── ADD / DELETE STUDENT ──────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('addModal').classList.add('open');
+  setTimeout(() => document.getElementById('newStudentName').focus(), 50);
+}
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('open');
+  document.getElementById('newStudentName').value = '';
+}
+async function confirmAdd() {
+  const name = document.getElementById('newStudentName').value.trim();
+  if (!name) return;
+  const s = initStudent(name);
+  students.push(s);
+  activeIdx = students.length - 1;
+  closeAddModal();
+  renderSidebar();
+  renderStudent();
+  await saveStudent(activeIdx);
+  showToast(`${name} added ✓`);
+}
+
+function openDeleteModal(e, i) {
+  e.stopPropagation();
+  studentToDelete = i;
+  document.getElementById('deleteModalMsg').textContent = `This will permanently delete "${students[i].name}" and all their records. This cannot be undone.`;
+  document.getElementById('deleteModal').classList.add('open');
+}
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('open');
+  studentToDelete = null;
+}
+async function confirmDelete() {
+  if (studentToDelete === null) return;
+  const name = students[studentToDelete].name;
+  const ok = await deleteStudentFromDB(studentToDelete);
+  if (!ok) { closeDeleteModal(); return; }
+  students.splice(studentToDelete, 1);
+  if (activeIdx >= students.length) activeIdx = students.length - 1;
+  if (students.length === 0) activeIdx = null;
+  closeDeleteModal();
+  renderSidebar();
+  if (activeIdx !== null) renderStudent(); else showEmpty();
+  showToast(`${name} deleted`);
+}
+
+// ─── UTILS ─────────────────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─── INIT ──────────────────────────────────────────────────────────
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    currentUser = session.user;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('topbarUser').textContent = currentUser.email;
+    await loadStudents();
+  } else {
+    currentUser = null;
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('authScreen').style.display = 'flex';
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeAddModal(); closeDeleteModal(); }
+});
+</script>
+</body>
+</html>
